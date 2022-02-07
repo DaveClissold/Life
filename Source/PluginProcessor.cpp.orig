@@ -11,6 +11,10 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "LogUtil.h"
+//@AS
+#include "authorization/auth.h"
+#include "authorization/constants.h"
+
 String LifeAudioProcessor::paramDelayLeft = "DelayLeft";
 String LifeAudioProcessor::paramDelayRight = "DelayRight";
 
@@ -57,6 +61,7 @@ LifeAudioProcessor::LifeAudioProcessor():
                      #endif
                        ),
 #endif
+    mUnlocked(false) // initially locked
 {
 	
 	mUndoManager = new UndoManager();
@@ -223,6 +228,14 @@ void LifeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 	mWet = new Life::DSP::WetDry();
     mGainMaster = new Life::DSP::GainMaster(-10.0f, 10.0f, numOutputChannel);
     
+    
+    // @AS try to unlock the audio thread (in case the UI is never surfaced)
+    #ifdef SEQ_ALWAYS_UNLOCKED
+    mUnlocked = true;
+    #else
+    audioThreadAuthorize();
+    #endif
+
     
 	//mDelay = new Life::DSP::StaticDelay(float(sampleRate), 0.1f, numOutputChannel);
 	// Aplly Pitch/Feedback
@@ -400,11 +413,19 @@ void LifeAudioProcessor::processBlock(AudioSampleBuffer& buffer, MidiBuffer& mid
 
 	if (totalNumInputChannels == 1 && totalNumOutputChannels == 1)
 	{
+<<<<<<< HEAD
+//		if (ProcessMS == true)
+//		{
+//			mMSConverter->ConvertLRToMid(buffer);
+//		}
+
+=======
 		if (ProcessMS == true)
 		{
 			//mMSConverter->ConvertLRToMid(buffer); // Temporarily disabled due to Logic Crash  
 		}
 		m3SampleDelay[L]->process(dryAudioBuffer, L); // Delay dry buffer by 3 samples (Fixing Issue).
+>>>>>>> 922caa39ea923aebefb37b2f3ae9ae9ad23995e8
 		mDelayVibrato[L]->process(buffer, L);
 		mTremolo[L]->process(buffer, L);
 		mFilterHP[L]->process(buffer, L);
@@ -463,6 +484,16 @@ void LifeAudioProcessor::processBlock(AudioSampleBuffer& buffer, MidiBuffer& mid
 
 	}
 
+<<<<<<< HEAD
+    if (totalNumOutputChannels != 1) // Temporarily disabled if output is mono due to Logic Crash
+    {
+        if (ProcessMS == true)
+        {
+            mMSConverter->ConvertMSToLR(buffer);
+        }
+    }
+
+=======
 	if (totalNumOutputChannels != 1) // Temporarily disabled if output is mono due to Logic Crash  
 	{
 		if (ProcessMS == true)
@@ -470,7 +501,7 @@ void LifeAudioProcessor::processBlock(AudioSampleBuffer& buffer, MidiBuffer& mid
 			mMSConverter->ConvertMSToLR(buffer);
 		}
 	}
-
+>>>>>>> 922caa39ea923aebefb37b2f3ae9ae9ad23995e8
 
 	mWidth->process(buffer);
 	
