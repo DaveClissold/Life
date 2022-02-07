@@ -257,6 +257,12 @@ namespace Jimmy {
 				smoothedVibratoDepth.setValue(mDepth);
 			}
 
+			void SetPhase(float Phase) {
+				for (int c = 0; c < mNumChannels; c++) {
+					mLfo.getRawDataPointer()[c].SetPhase(Phase);
+				}
+			}
+
 			void SetFeedback(float feedBackPct) {
 				for (int c = 0; c < mNumChannels; c++) {
 					mSmoothFeedback.getReference(c).setNewValue(feedBackPct);
@@ -296,12 +302,12 @@ namespace Jimmy {
 				}
 			}
 
-			void process(AudioBuffer<float> &buffer)
+			void process(AudioBuffer<float> &buffer, int chan)
 			{
 				updateDelayTime();
 
 				auto numSamples = buffer.getNumSamples();
-				auto numChannels = buffer.getNumChannels();
+			//	auto numChannels = buffer.getNumChannels();
 
 				auto audio = buffer.getArrayOfWritePointers();
 				//auto delayBuffer = mDelayBuffer.getArrayOfWritePointers();
@@ -313,8 +319,8 @@ namespace Jimmy {
 					headGains[0] = playheads[0].gain();
 					headGains[1] = playheads[1].gain();
 
-					for (int chan = 0; chan < numChannels; ++chan)
-					{
+//					for (int chan = 0; chan < numChannels; ++chan)
+		//			{
 						float summedDelayOutputs{ 0.0f };
 
 						for (int headIndex = 0; headIndex < 2; ++headIndex)
@@ -322,7 +328,9 @@ namespace Jimmy {
 							if (!playheads[headIndex].stopped())
 								summedDelayOutputs += delays[chan]->geti(playheads[headIndex].delayTime) * headGains[headIndex];
 
+
 							jassert(!isnan(summedDelayOutputs));
+
 						}
 
 						LFO &lfo = mLfo.getRawDataPointer()[chan];
@@ -330,8 +338,8 @@ namespace Jimmy {
 
 						float vibratoDelayLength = smoothedVibratoDepth.getNextValue() * mDelaySamplesForVibrato;
 
-						//float vibratoLfoAppliedDelayLength = 1.0f + vibratoDelayLength + lfo.Value() * vibratoDelayLength;
-						float vibratoLfoAppliedDelayLength = 1.0f;
+            float vibratoLfoAppliedDelayLength = 1.0f + vibratoDelayLength + lfo.Value() * vibratoDelayLength;
+            //float vibratoLfoAppliedDelayLength = 1.0f;
 
 						auto vibratoOut = vibratoDelays[chan]->geti(vibratoLfoAppliedDelayLength);
 
@@ -346,7 +354,7 @@ namespace Jimmy {
 						float input	= (1.0f - feedback) * originalInput + feedback * vibratoOut;
 
 						delays[chan]->put(input);
-					}
+				//	}
 				}
 			}
 		};

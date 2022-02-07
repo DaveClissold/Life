@@ -39,14 +39,14 @@ namespace Jimmy {
 			void SetFrequency(float frequency) {
 				mLfo.SetFrequency(frequency);
 			};
-		/*	void SetPhase(float phase) {
+			void SetPhase(float phase) {
 				mLfo.SetPhase(phase);
-			}*/
+			}
 			void SetDepth(float depth) {
 				mDepth = depth;
 			};
 
-			void process(AudioBuffer<float> &buffer) {
+			void process(AudioBuffer<float> &buffer, int Chan) {
 				const float **input = buffer.getArrayOfReadPointers();
 				float **output = buffer.getArrayOfWritePointers();
 				int numSamples = buffer.getNumSamples();
@@ -54,9 +54,8 @@ namespace Jimmy {
 					float lfo = mLfo.Value();
 					// first multiply the value by depth/100
 					float gain = mDepth / 30.0 * (lfo - 1)  + 1;
-					for (int c = 0; c < mNumChans; c++) {
-						output[c][i] = input[c][i] * gain;
-					}
+						output[Chan][i] = input[Chan][i] * gain;
+					
 				}
 			}
 		};

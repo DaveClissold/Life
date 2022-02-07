@@ -11,82 +11,137 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "LogUtil.h"
-String LifeAudioProcessor::paramDelay = "Delay";
-String LifeAudioProcessor::paramPitchRate = "PitchRate";
-String LifeAudioProcessor::paramPitchAmount = "PitchAmount";
-String LifeAudioProcessor::paramFeedback = "Feedback";
+//@AS
+#include "authorization/auth.h"
+#include "authorization/constants.h"
 
-String LifeAudioProcessor::paramAmplitudeRate = "AmplitudeRate";
-String LifeAudioProcessor::paramAmplitudeAmount = "AmplitudeAmount";
+String LifeAudioProcessor::paramDelayLeft = "DelayLeft";
+String LifeAudioProcessor::paramDelayRight = "DelayRight";
 
-String LifeAudioProcessor::paramHighFreq = "HighFreq";
-String LifeAudioProcessor::paramLowFreq = "LowFreq";
+String LifeAudioProcessor::paramPitchRateLeft = "PitchRateLeft";
+String LifeAudioProcessor::paramPitchAmountLeft = "PitchAmountLeft";
+String LifeAudioProcessor::paramPitchRateRight = "PitchRateRight";
+String LifeAudioProcessor::paramPitchAmountRight = "PitchAmountRight";
+
+String LifeAudioProcessor::paramFeedbackLeft = "Feedback Left";
+String LifeAudioProcessor::paramFeedbackRight = "Feedback Right";
+
+String LifeAudioProcessor::paramAmplitudeRateLeft = "AmplitudeRateLeft";
+String LifeAudioProcessor::paramAmplitudeRateRight = "AmplitudeRateRight";
+
+String LifeAudioProcessor::paramAmplitudeAmountLeft = "AmplitudeAmountLeft";
+String LifeAudioProcessor::paramAmplitudeAmountRight = "AmplitudeAmountRight";
+
+String LifeAudioProcessor::paramHighFreqLeft = "HighFreqLeft";
+String LifeAudioProcessor::paramHighFreqRight = "HighFreqRight";
+String LifeAudioProcessor::paramLowFreqLeft = "LowFreqLeft";
+String LifeAudioProcessor::paramLowFreqRight = "LowFreqRight";
 
 String LifeAudioProcessor::paramWidth = "Width";
 String LifeAudioProcessor::paramWetDry = "WetDry";
 
 String LifeAudioProcessor::paramGainMaster = "GainMaster";
+
+String LifeAudioProcessor::paramLR_Or_MSToggle = "LR or MS";
+String LifeAudioProcessor::paramPitchOscSyncToggle = "Invert Vibrato";
+String LifeAudioProcessor::paramAmpOscSyncToggle = "Invert Tremolo";
+
+String LifeAudioProcessor::paramDelayLinkToggle = "Delay Link";
+String LifeAudioProcessor::paramFeedbackLinkToggle = "Feedback Link";
+
 //==============================================================================
-LifeAudioProcessor::LifeAudioProcessor()
+LifeAudioProcessor::LifeAudioProcessor():
 #ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor (BusesProperties()
+      AudioProcessor (BusesProperties()
                      #if ! JucePlugin_IsMidiEffect
                       #if ! JucePlugin_IsSynth
                        .withInput  ("Input",  AudioChannelSet::stereo(), true)
                       #endif
                        .withOutput ("Output", AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ),
 #endif
+    mUnlocked(false) // initially locked
 {
 	
 	mUndoManager = new UndoManager();
 	mState = new AudioProcessorValueTreeState(*this, mUndoManager);
 	// Current design no need add listener 
-	mState->createAndAddParameter(paramDelay, "Delay", TRANS("Delay"), NormalisableRange<float>(0.0f, 100.0f, 0.01), 0.0, nullptr, nullptr);
-	mState->createAndAddParameter(paramPitchRate, "Pitch Rate", TRANS("Pitch Rate"), NormalisableRange<float>(1.0f, 4.0f, 1), 1.0, nullptr, nullptr);
-	mState->createAndAddParameter(paramPitchAmount, "Pitch Amount", TRANS("Pitch Amount"), NormalisableRange<float>(0.0f, 5.0f, 1), 0.0, nullptr, nullptr);
-	mState->createAndAddParameter(paramFeedback, "Feedback", TRANS("Feedback"), NormalisableRange<float>(0.0f, 100.0f, 0.1), 50.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramDelayLeft, "DelayLeft", TRANS("DelayLeft"), NormalisableRange<float>(0.0f, 100.0f, 0.01), 0.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramDelayRight, "DelayRight", TRANS("DelayRight"), NormalisableRange<float>(0.0f, 100.0f, 0.01), 0.0, nullptr, nullptr);
+	
+	mState->createAndAddParameter(paramPitchRateLeft, "Pitch Rate Left", TRANS("Pitch Rate Left"), NormalisableRange<float>(1.0f, 4.0f, 1), 1.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramPitchRateRight, "Pitch Rate Right", TRANS("Pitch Rate Right"), NormalisableRange<float>(1.0f, 4.0f, 1), 1.0, nullptr, nullptr);
 
-	mState->createAndAddParameter(paramAmplitudeRate, "Amplitude Rate", TRANS("Amplitude Rate"), NormalisableRange<float>(1.0f, 4.0f, 1), 1.0, nullptr, nullptr);
-	mState->createAndAddParameter(paramAmplitudeAmount, "Amplitude Amount", TRANS("Amplitude Amount"), NormalisableRange<float>(0.0f, 5.0f, 1), 0.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramPitchAmountLeft, "Pitch Amount Left", TRANS("Pitch Amount Left"), NormalisableRange<float>(0.0f, 5.0f, 1), 0.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramPitchAmountRight, "Pitch Amount Right", TRANS("Pitch Amount Right"), NormalisableRange<float>(0.0f, 5.0f, 1), 0.0, nullptr, nullptr);
+	
+	mState->createAndAddParameter(paramFeedbackLeft, "Feedback Left", TRANS("Feedback Left"), NormalisableRange<float>(0.0f, 100.0f, 0.1), 50.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramFeedbackRight, "Feedback Right", TRANS("Feedback Right"), NormalisableRange<float>(0.0f, 100.0f, 0.1), 50.0, nullptr, nullptr);
 
-	mState->createAndAddParameter(paramHighFreq, "High Freq", TRANS("High Freq"), NormalisableRange<float>(20.0f, 20000.0f, 0.1), 20.0, nullptr, nullptr);
-	mState->createAndAddParameter(paramLowFreq, "Low Freq", TRANS("Low Freq"), NormalisableRange<float>(20.0f, 20000.0f, 0.1), 20000.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramAmplitudeRateLeft, "Amplitude Rate Left", TRANS("Amplitude Rate Left"), NormalisableRange<float>(1.0f, 4.0f, 1), 1.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramAmplitudeRateRight, "Amplitude Rate Right", TRANS("Amplitude Rate Right"), NormalisableRange<float>(1.0f, 4.0f, 1), 1.0, nullptr, nullptr);
 
+	mState->createAndAddParameter(paramAmplitudeAmountLeft, "Amplitude Amount Left", TRANS("Amplitude Amount Left"), NormalisableRange<float>(0.0f, 5.0f, 1), 0.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramAmplitudeAmountRight, "Amplitude Amount Right", TRANS("Amplitude Amount Right"), NormalisableRange<float>(0.0f, 5.0f, 1), 0.0, nullptr, nullptr);
+	
+	mState->createAndAddParameter(paramHighFreqLeft, "High Freq Left", TRANS("High Freq Left"), NormalisableRange<float>(20.0f, 20000.0f, 0.1), 20.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramHighFreqRight, "High Freq Right", TRANS("High Freq Right"), NormalisableRange<float>(20.0f, 20000.0f, 0.1), 20.0, nullptr, nullptr);
+
+	mState->createAndAddParameter(paramLowFreqLeft, "Low Freq Left", TRANS("Low Freq Left"), NormalisableRange<float>(20.0f, 20000.0f, 0.1), 20000.0, nullptr, nullptr);
+	mState->createAndAddParameter(paramLowFreqRight, "Low Freq Right", TRANS("Low Freq Right"), NormalisableRange<float>(20.0f, 20000.0f, 0.1), 20000.0, nullptr, nullptr);
+	
 	mState->createAndAddParameter(paramWidth, "Width", TRANS("Width"), NormalisableRange<float>(0.0f, 2.0f, 0.01), 1.0, nullptr, nullptr);
 	mState->createAndAddParameter(paramWetDry, "Wet Dry", TRANS("Wet Dry"), NormalisableRange<float>(0.0f, 100.0f, 0.1), 50.0, nullptr, nullptr);
 
 	mState->createAndAddParameter(paramGainMaster, "Gain Master", TRANS("Gain Master"), NormalisableRange<float>(-10.0f, 10.0f, 0.1), 0.0, nullptr, nullptr);
+
+	mState->createAndAddParameter(paramLR_Or_MSToggle, "LR or MS Toggle", TRANS("LR or MS Toggle"), NormalisableRange<float>(0, 1, 1), 0, nullptr, nullptr);
+	mState->createAndAddParameter(paramPitchOscSyncToggle, "Invert Vibrato", TRANS("Invert Vibrato"), NormalisableRange<float>(0, 1, 1), 0, nullptr, nullptr);
+	mState->createAndAddParameter(paramAmpOscSyncToggle, "Invert Tremolo", TRANS("Invert Tremolo"), NormalisableRange<float>(0, 1, 1), 0, nullptr, nullptr);
+
+	mState->createAndAddParameter(paramDelayLinkToggle, "Delay Link", TRANS("Delay Link"), NormalisableRange<float>(0, 1, 1), 0, nullptr, nullptr);
+	mState->createAndAddParameter(paramFeedbackLinkToggle, "Feedback Link", TRANS("Feedback Link"), NormalisableRange<float>(0, 1, 1), 0, nullptr, nullptr);
+
 	mState->state = ValueTree("LifeParameters");
 
-	mState->addParameterListener(paramDelay, this);
-	mState->addParameterListener(paramPitchRate, this);
-	mState->addParameterListener(paramPitchAmount, this);
-	mState->addParameterListener(paramFeedback, this);
+	mState->addParameterListener(paramDelayLeft, this);
+	mState->addParameterListener(paramDelayRight, this);
 
-	mState->addParameterListener(paramAmplitudeRate, this);
-	mState->addParameterListener(paramAmplitudeAmount, this);
+	mState->addParameterListener(paramPitchRateLeft, this);
+	mState->addParameterListener(paramPitchRateRight, this);
+	mState->addParameterListener(paramPitchAmountLeft, this);
+	mState->addParameterListener(paramPitchAmountRight, this);
 
-	mState->addParameterListener(paramHighFreq, this);
-	mState->addParameterListener(paramLowFreq, this);
+	mState->addParameterListener(paramFeedbackLeft, this);
+	mState->addParameterListener(paramFeedbackRight, this);
 
+	mState->addParameterListener(paramAmplitudeRateLeft, this);
+	mState->addParameterListener(paramAmplitudeRateRight, this);
+
+	mState->addParameterListener(paramAmplitudeAmountLeft, this);
+	mState->addParameterListener(paramAmplitudeAmountRight, this);
+	
+	mState->addParameterListener(paramAmplitudeAmountLeft, this);
+	mState->addParameterListener(paramAmplitudeAmountRight, this);
+
+	mState->addParameterListener(paramLowFreqLeft, this);
+	mState->addParameterListener(paramLowFreqRight, this);
+
+	mState->addParameterListener(paramHighFreqLeft, this);
+	mState->addParameterListener(paramHighFreqRight, this);
+		
 	mState->addParameterListener(paramWidth, this);
 	mState->addParameterListener(paramWetDry, this);
 
 	mState->addParameterListener(paramGainMaster, this);
-    float sampleRate = 44100.0;
-    int numOutputChannel = 2;
-    mDelayVibrato = new Jimmy::DSP::DelayVibrato(float(sampleRate), 0.1f, numOutputChannel);
-    mTremolo = new Jimmy::DSP::Tremolo(float(sampleRate), numOutputChannel);
-    
-    mFilterHP = new Jimmy::DSP::IIRFilterHP(float(sampleRate), numOutputChannel);
-    mFilterLP = new Jimmy::DSP::IIRFilterLP(float(sampleRate), numOutputChannel);
-    
-    mWidth = new Jimmy::DSP::Width();
-    mWet = new Jimmy::DSP::WetDry();
-    
-    mGainMaster = new Jimmy::DSP::GainMaster(-10.0f, 10.0f, numOutputChannel);
+
+	mState->addParameterListener(paramLR_Or_MSToggle, this);
+	mState->addParameterListener(paramPitchOscSyncToggle, this);
+	mState->addParameterListener(paramAmpOscSyncToggle, this);
+
+	mState->addParameterListener(paramDelayLinkToggle, this);
+	mState->addParameterListener(paramFeedbackLinkToggle, this);
 }
 
 LifeAudioProcessor::~LifeAudioProcessor()
@@ -152,51 +207,113 @@ void LifeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 	int numOutputChannel = getTotalNumOutputChannels();
     
 	dryAudioBuffer.setSize(numOutputChannel, samplesPerBlock, false, true);
+	SideBuffer.setSize(numOutputChannel, samplesPerBlock, false, true);
 
-	mDelayVibrato = new Jimmy::DSP::DelayVibrato(float(sampleRate), 0.1f, numOutputChannel);
-	mTremolo = new Jimmy::DSP::Tremolo(float(sampleRate), numOutputChannel);
+	mDelayVibrato[L] = new Jimmy::DSP::DelayVibrato(float(sampleRate), 0.1f, numOutputChannel);
+	mDelayVibrato[R] = new Jimmy::DSP::DelayVibrato(float(sampleRate), 0.1f, numOutputChannel);
 
-	mFilterHP = new Jimmy::DSP::IIRFilterHP(float(sampleRate), numOutputChannel);
-	mFilterLP = new Jimmy::DSP::IIRFilterLP(float(sampleRate), numOutputChannel);
+	m3SampleDelay[L] = new Jimmy::DSP::DelayVibrato(float(sampleRate), 0.1f, numOutputChannel);
+	m3SampleDelay[R] = new Jimmy::DSP::DelayVibrato(float(sampleRate), 0.1f, numOutputChannel);
+
+	mTremolo[L] = new Jimmy::DSP::Tremolo(float(sampleRate), numOutputChannel);
+	mTremolo[R] = new Jimmy::DSP::Tremolo(float(sampleRate), numOutputChannel);
+	
+	mFilterHP[L] = new Jimmy::DSP::IIRFilterHP(float(sampleRate), numOutputChannel);
+	mFilterHP[R] = new Jimmy::DSP::IIRFilterHP(float(sampleRate), numOutputChannel);
+
+	mFilterLP[L] = new Jimmy::DSP::IIRFilterLP(float(sampleRate), numOutputChannel);
+	mFilterLP[R] = new Jimmy::DSP::IIRFilterLP(float(sampleRate), numOutputChannel);
 
 	mWidth = new Jimmy::DSP::Width();
 	mWet = new Jimmy::DSP::WetDry();
-    
     mGainMaster = new Jimmy::DSP::GainMaster(-10.0f, 10.0f, numOutputChannel);
+    
+    
+    // @AS try to unlock the audio thread (in case the UI is never surfaced)
+    #ifdef SEQ_ALWAYS_UNLOCKED
+    mUnlocked = true;
+    #else
+    audioThreadAuthorize();
+    #endif
+
     
 	//mDelay = new Jimmy::DSP::StaticDelay(float(sampleRate), 0.1f, numOutputChannel);
 	// Aplly Pitch/Feedback
-	mDelayVibrato->preparePlay(sampleRate, samplesPerBlock);
-	float *delayMs = mState->getRawParameterValue(paramDelay);
-	mDelayVibrato->setDelayInMiliSec(*delayMs);
+	mDelayVibrato[L]->preparePlay(sampleRate, samplesPerBlock);
+	mDelayVibrato[R]->preparePlay(sampleRate, samplesPerBlock);
+	float *delayMsLeft = mState->getRawParameterValue(paramDelayLeft);
+	float *delayMsRight = mState->getRawParameterValue(paramDelayRight);
+
+	m3SampleDelay[L]->setDelayInMiliSec(3.0 / sampleRate); //Time in Miliseconds = samples / sampleRate 
+	m3SampleDelay[R]->setDelayInMiliSec(3.0 / sampleRate); //Time in Miliseconds = samples / sampleRate 
+
+	mDelayVibrato[L]->setDelayInMiliSec(*delayMsLeft);
+	mDelayVibrato[R]->setDelayInMiliSec(*delayMsRight);
 	//mDelay->preparePlay(samplesPerBlock);
 	//mDelay->setDelayInMiliSec(*delayMs);
 
-	float *ratePitch = mState->getRawParameterValue(paramPitchRate);
-	float *amountPitch = mState->getRawParameterValue(paramPitchAmount);
-	float *feedback = mState->getRawParameterValue(paramFeedback);
-	float freqPitch = RateToFrequency(*ratePitch);
+	DBG((String)sampleRate);
+
+	float *ratePitchLeft = mState->getRawParameterValue(paramPitchRateLeft);
+	float *amountPitchLeft = mState->getRawParameterValue(paramPitchAmountLeft);
+	float *ratePitchRight = mState->getRawParameterValue(paramPitchRateRight);
+	float *amountPitchRight = mState->getRawParameterValue(paramPitchAmountRight);
+
+	float *feedbackLeft = mState->getRawParameterValue(paramFeedbackLeft);
+	float *feedbackRight = mState->getRawParameterValue(paramFeedbackRight);
+	
+	float freqPitchLeft = RateToFrequency(*ratePitchLeft);
+	float freqPitchRight = RateToFrequency(*ratePitchRight);
+
 	//mVibrato->preparePlay(sampleRate);
 //	mVibrato->SetFrequency(freqPitch);
 //	mVibrato->SetDepth(*amountPitch);
 //	mVibrato->SetFeedback(*feedback);
-	mDelayVibrato->SetFrequency(freqPitch);
-	mDelayVibrato->SetDepth(*amountPitch);
-	mDelayVibrato->SetFeedback(*feedback);
+	mDelayVibrato[L]->SetFrequency(freqPitchLeft);
+	mDelayVibrato[R]->SetFrequency(freqPitchRight);
+
+	mDelayVibrato[L]->SetDepth(*amountPitchLeft);
+	mDelayVibrato[R]->SetDepth(*amountPitchRight);
+
+	mDelayVibrato[L]->SetFeedback(*feedbackLeft);
+	mDelayVibrato[R]->SetFeedback(*feedbackRight);
+
+	m3SampleDelay[L]->SetFrequency(1.0);
+	m3SampleDelay[L]->SetDepth(0.0);
+	m3SampleDelay[L]->SetFeedback(0.0);
+	m3SampleDelay[R]->SetFrequency(1.0);
+	m3SampleDelay[R]->SetDepth(0.0);
+	m3SampleDelay[R]->SetFeedback(0.0);
 	
 	// Apply AM
-	float *rateAm = mState->getRawParameterValue(paramAmplitudeRate);
-	float freqAm = RateToFrequency(*rateAm);
-	float *amountAm = mState->getRawParameterValue(paramAmplitudeAmount);
-	mTremolo->SetFrequency(freqAm);
-	mTremolo->SetDepth(*amountAm);
+	float *rateAmLeft = mState->getRawParameterValue(paramAmplitudeRateLeft);
+	float *rateAmRight = mState->getRawParameterValue(paramAmplitudeRateRight);
+
+	float freqAmLeft = RateToFrequency(*rateAmLeft);
+	float freqAmRight = RateToFrequency(*rateAmRight);
+		
+	float *amountAmLeft = mState->getRawParameterValue(paramAmplitudeAmountLeft);
+	float *amountAmRight = mState->getRawParameterValue(paramAmplitudeAmountRight);
+
+	mTremolo[L]->SetFrequency(freqAmLeft);
+	mTremolo[R]->SetFrequency(freqAmRight);
+
+	mTremolo[L]->SetDepth(*amountAmLeft);
+	mTremolo[R]->SetDepth(*amountAmRight);
 
 	// Apply Filter
-	float *highFreq = mState->getRawParameterValue(paramHighFreq);
-	mFilterHP->changeCutOff(*highFreq);
+	float *highFreqLeft = mState->getRawParameterValue(paramHighFreqLeft);
+	float *highFreqRight = mState->getRawParameterValue(paramHighFreqRight);
 
-	float *lowFreq = mState->getRawParameterValue(paramLowFreq);
-	mFilterLP->changeCutOff(*lowFreq);
+	mFilterHP[L]->changeCutOff(*highFreqLeft);
+	mFilterHP[R]->changeCutOff(*highFreqRight);
+
+	float *lowFreqLeft = mState->getRawParameterValue(paramLowFreqLeft);
+	float *lowFreqRight = mState->getRawParameterValue(paramLowFreqRight);
+
+	mFilterLP[L]->changeCutOff(*lowFreqLeft);
+	mFilterLP[R]->changeCutOff(*lowFreqRight);
+
 	//Apply Width
 	float width0to1 = mState->getParameter(paramWidth)->getValue();
 	mWidth->preparePlay(sampleRate);
@@ -211,6 +328,7 @@ void LifeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 	float gain0to1 = mState->getParameter(paramGainMaster)->getValue();
 	mGainMaster->preparePlay(sampleRate);
 	mGainMaster->SetGainDb0to1(gain0to1);
+
 }
 
 void LifeAudioProcessor::releaseResources()
@@ -245,6 +363,14 @@ bool LifeAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
 
 void LifeAudioProcessor::processBlock(AudioSampleBuffer& buffer, MidiBuffer& midiMessages)
 {
+    //@AS
+    if (!mUnlocked){
+        buffer.clear();
+        return;
+    }
+    
+	setLatencySamples(3);
+
 	if (getPlayHead()->getCurrentPosition(currentPositionInfo))
 		lastKnownBpm = currentPositionInfo.bpm;
 
@@ -261,30 +387,121 @@ void LifeAudioProcessor::processBlock(AudioSampleBuffer& buffer, MidiBuffer& mid
 	if (totalNumInputChannels < 1 || totalNumInputChannels > 2 || buffer.getNumSamples() == 0)
 		return;
 
-	float *delayMs = mState->getRawParameterValue(paramDelay);
+	float *ratePitchLeft = mState->getRawParameterValue(paramPitchRateLeft);
+	float *ratePitchRight = mState->getRawParameterValue(paramPitchRateRight);
 
-    float *ratePitch = mState->getRawParameterValue(paramPitchRate);
-    float freq = RateToFrequency(*ratePitch);
+	float *delayMsLeft = mState->getRawParameterValue(paramDelayLeft);
+	float *delayMsRight = mState->getRawParameterValue(paramDelayRight);
 
-	mDelayVibrato->setDelayInMiliSec(*delayMs);
-    mDelayVibrato->SetFrequency(freq);
+	float freqLeft = RateToFrequency(*ratePitchLeft);
+	float freqRight = RateToFrequency(*ratePitchRight);
+
+	m3SampleDelay[L]->SetFrequency(1.0);
+	m3SampleDelay[R]->SetFrequency(1.0);
+
+	mDelayVibrato[L]->SetFrequency(freqLeft);
+	mDelayVibrato[R]->SetFrequency(freqRight);
+
+	m3SampleDelay[L]->setDelayInMiliSec(3.0 / getSampleRate()); //Time in Miliseconds = samples / sampleRate 
+	m3SampleDelay[R]->setDelayInMiliSec(3.0 / getSampleRate()); //Time in Miliseconds = samples / sampleRate 
+
+	mDelayVibrato[L]->setDelayInMiliSec(*delayMsLeft);
+	mDelayVibrato[R]->setDelayInMiliSec(*delayMsRight);
 	
 	dryAudioBuffer.makeCopyOf(buffer, true);
+	SideBuffer.makeCopyOf(buffer, true);
 
-	mDelayVibrato->process(buffer);
+	if (totalNumInputChannels == 1 && totalNumOutputChannels == 1)
+	{
+		if (ProcessMS == true)
+		{
+			//mMSConverter->ConvertLRToMid(buffer); // Temporarily disabled due to Logic Crash  
+		}
+		m3SampleDelay[L]->process(dryAudioBuffer, L); // Delay dry buffer by 3 samples (Fixing Issue).
+		mDelayVibrato[L]->process(buffer, L);
+		mTremolo[L]->process(buffer, L);
+		mFilterHP[L]->process(buffer, L);
+		mFilterLP[L]->process(buffer, L);
+	}
+	else if (totalNumInputChannels == 2 && totalNumOutputChannels == 2)
+	{
+		if (ProcessMS == true)
+		{
+			mMSConverter->ConvertLRToMid(buffer);
+			mMSConverter->ConvertLRToSide(buffer, SideBuffer);
+		}
 
-	// Apply AM
-	mTremolo->process(buffer);
+		m3SampleDelay[L]->process(dryAudioBuffer, L); // Delay dry buffer by 3 samples (Fixing Issue).
+		mDelayVibrato[L]->process(buffer, L);
+		mTremolo[L]->process(buffer, L);
+		mFilterHP[L]->process(buffer, L);
+		mFilterLP[L]->process(buffer, L);
 
-	// Apply Filter
-	mFilterHP->process(buffer);
-	
-	mFilterLP->process(buffer);
-	
+		if (totalNumOutputChannels >= 2)
+		{
+			m3SampleDelay[R]->process(dryAudioBuffer, R); // Delay dry buffer by 3 samples (Fixing Issue).
+			mDelayVibrato[R]->process(buffer, R);
+			mTremolo[R]->process(buffer, R);
+			mFilterHP[R]->process(buffer, R);
+			mFilterLP[R]->process(buffer, R);
+		}
+		
+
+	}
+	else if (totalNumInputChannels == 1 && totalNumOutputChannels == 2)
+	{
+		if (ProcessMS == true)
+		{
+			mMSConverter->ConvertLRToMid(buffer);
+			mMSConverter->ConvertLRToSide(buffer, SideBuffer);
+		}
+
+		m3SampleDelay[L]->process(dryAudioBuffer, L); // Delay dry buffer by 3 samples (Fixing Issue).
+		mDelayVibrato[L]->process(buffer, L);
+		mTremolo[L]->process(buffer, L);
+		mFilterHP[L]->process(buffer, L);
+		mFilterLP[L]->process(buffer, L);
+
+		if (totalNumOutputChannels >= 2)
+		{
+		//	m3SampleDelay->process(dryAudioBuffer, L); // Delay dry buffer by 3 samples (Fixing Issue).
+			mDelayVibrato[R]->process(SideBuffer, L);
+			mTremolo[R]->process(SideBuffer, L);
+			mFilterHP[R]->process(SideBuffer, L);
+			mFilterLP[R]->process(SideBuffer, L);
+		}
+
+		buffer.copyFrom(R, 0, SideBuffer.getWritePointer(L), SideBuffer.getNumSamples());
+		DBG("OUT IS 1 2");
+
+	}
+
+	if (totalNumOutputChannels != 1) // Temporarily disabled if output is mono due to Logic Crash  
+	{
+		if (ProcessMS == true)
+		{
+			mMSConverter->ConvertMSToLR(buffer);
+		}
+	}
+
+
 	mWidth->process(buffer);
-	mWet->process(dryAudioBuffer, buffer);
-
-	// Apply gain
+	
+	if (totalNumInputChannels == 1 && totalNumOutputChannels == 1)
+ 	{
+ 		mWet->process(dryAudioBuffer, buffer, 0, 0);
+ 	}
+ 	else if (totalNumInputChannels == 1 && totalNumOutputChannels == 2)
+ 	{
+ 		mWet->process(dryAudioBuffer, buffer, 0, 0);
+ 		mWet->process(dryAudioBuffer, buffer, 0, 1);
+ 	}
+	else
+	{
+		mWet->process(dryAudioBuffer, buffer, 0, 0);
+		mWet->process(dryAudioBuffer, buffer, 1, 1);
+	}
+		 
 	mGainMaster->process(buffer);
 }
 
@@ -304,60 +521,116 @@ void LifeAudioProcessor::parameterChanged(const String& parameterID, float newVa
     //    return; 
     //}
 
-	if (parameterID == LifeAudioProcessor::paramDelay) {
+	if (parameterID == LifeAudioProcessor::paramDelayLeft) {
 //		suspendProcessing(true);
 		//mDelay->setDelayInMiliSec(newValue);
-		mDelayVibrato->setDelayInMiliSec(newValue);
+		mDelayVibrato[L]->setDelayInMiliSec(newValue);
 //		suspendProcessing(false);
 	}
-	else if (parameterID == LifeAudioProcessor::paramPitchRate) {
-//		suspendProcessing(true);
+	else if (parameterID == LifeAudioProcessor::paramDelayRight) {
+		//		suspendProcessing(true);
+		//mDelay->setDelayInMiliSec(newValue);
+		mDelayVibrato[R]->setDelayInMiliSec(newValue);
+		//		suspendProcessing(false);
+	}
+	else if (parameterID == LifeAudioProcessor::paramPitchRateLeft) {
+//		suspendProcessing(true);AU
 		//float *ratePitch = mState->getRawParameterValue(paramPitchRate);
 		float freqPitch = RateToFrequency(newValue);
-		mDelayVibrato->SetFrequency(freqPitch);
+		mDelayVibrato[L]->SetFrequency(freqPitch);
 		//mVibrato->SetFrequency(freqPitch);
 //		suspendProcessing(false);
 	}
-	else if (parameterID == LifeAudioProcessor::paramPitchAmount) {
+	else if (parameterID == LifeAudioProcessor::paramPitchRateRight) {
+		//		suspendProcessing(true);AU
+		//float *ratePitch = mState->getRawParameterValue(paramPitchRate);
+		float freqPitch = RateToFrequency(newValue);
+		mDelayVibrato[R]->SetFrequency(freqPitch);
+
+		//mVibrato->SetFrequency(freqPitch);
+		//		suspendProcessing(false);
+	}
+	else if (parameterID == LifeAudioProcessor::paramPitchAmountLeft) {
 //		suspendProcessing(true);
 		//float *amountPitch = mState->getRawParameterValue(paramPitchAmount);
 		//mVibrato->SetDepth(newValue);
-		mDelayVibrato->SetDepth(newValue);
+		mDelayVibrato[L]->SetDepth(newValue);
 //		suspendProcessing(false);
 	}
-	else if (parameterID == LifeAudioProcessor::paramFeedback) {
+	else if (parameterID == LifeAudioProcessor::paramPitchAmountRight) {
+		//		suspendProcessing(true);
+		//float *amountPitch = mState->getRawParameterValue(paramPitchAmount);
+		//mVibrato->SetDepth(newValue);
+		mDelayVibrato[R]->SetDepth(newValue);
+		//		suspendProcessing(false);
+	}
+	else if (parameterID == LifeAudioProcessor::paramFeedbackLeft) {
 //		suspendProcessing(true);
 		//float *feedback = mState->getRawParameterValue(paramFeedback);
 		//mVibrato->SetFeedback(newValue);
-		mDelayVibrato->SetFeedback(newValue);
+		mDelayVibrato[L]->SetFeedback(newValue);
 //		suspendProcessing(false);
 	}
-	else if (parameterID == LifeAudioProcessor::paramAmplitudeRate) {
+	else if (parameterID == LifeAudioProcessor::paramFeedbackRight) {
+		//		suspendProcessing(true);
+		//float *feedback = mState->getRawParameterValue(paramFeedback);
+		//mVibrato->SetFeedback(newValue);
+		mDelayVibrato[R]->SetFeedback(newValue);
+		//		suspendProcessing(false);
+	}
+	else if (parameterID == LifeAudioProcessor::paramAmplitudeRateLeft) {
 //		suspendProcessing(true);
 		//float *rateAm = mState->getRawParameterValue(paramAmplitudeRate);
 		float freqAm = RateToFrequency(newValue);
-		mTremolo->SetFrequency(freqAm);
+		mTremolo[L]->SetFrequency(freqAm);
 //		suspendProcessing(false);
 	}
-	else if (parameterID == LifeAudioProcessor::paramAmplitudeAmount) {
+	else if (parameterID == LifeAudioProcessor::paramAmplitudeRateRight) {
+		//		suspendProcessing(true);
+		//float *rateAm = mState->getRawParameterValue(paramAmplitudeRate);
+		float freqAm = RateToFrequency(newValue);
+		mTremolo[R]->SetFrequency(freqAm);
+		//		suspendProcessing(false);
+	}
+	else if (parameterID == LifeAudioProcessor::paramAmplitudeAmountLeft) {
 //		suspendProcessing(true);
 		//float *amountAm = mState->getRawParameterValue(paramAmplitudeAmount);
-		mTremolo->SetDepth(newValue);
+		mTremolo[L]->SetDepth(newValue);
 //		suspendProcessing(false);
 	}
-	else if (parameterID == LifeAudioProcessor::paramHighFreq) {
+	else if (parameterID == LifeAudioProcessor::paramAmplitudeAmountRight) {
+		//		suspendProcessing(true);
+		//float *amountAm = mState->getRawParameterValue(paramAmplitudeAmount);
+		mTremolo[R]->SetDepth(newValue);
+		//		suspendProcessing(false);
+	}
+	else if (parameterID == LifeAudioProcessor::paramHighFreqLeft) {
 		// Apply Filter
 //		suspendProcessing(true);
-		mFilterHP->changeCutOff(newValue);
+		mFilterHP[L]->changeCutOff(newValue);
 //		mFilterHP->reset();
 //		suspendProcessing(false);
 	}
-	else if (parameterID == LifeAudioProcessor::paramLowFreq) {
+	else if (parameterID == LifeAudioProcessor::paramHighFreqRight) {
+		// Apply Filter
+		//		suspendProcessing(true);
+		mFilterHP[R]->changeCutOff(newValue);
+		//		mFilterHP->reset();
+		//		suspendProcessing(false);
+	}
+	else if (parameterID == LifeAudioProcessor::paramLowFreqLeft) {
 		// Apply Filter
 //		suspendProcessing(true);
-		mFilterLP->changeCutOff(newValue);
+		mFilterLP[L]->changeCutOff(newValue);
 //		mFilterLP->reset();
 //		suspendProcessing(false);
+	}
+	else if (parameterID == LifeAudioProcessor::paramLowFreqRight) {
+		// Apply Filter
+		//		suspendProcessing(true);
+		mFilterLP[R]->changeCutOff(newValue);
+		//		mFilterLP->reset();
+		//		suspendProcessing(false);
 	}
 	else if (parameterID == LifeAudioProcessor::paramWidth) {
 //		suspendProcessing(true);
@@ -375,6 +648,38 @@ void LifeAudioProcessor::parameterChanged(const String& parameterID, float newVa
 //		suspendProcessing(true);
 		mGainMaster->SetGainDB(newValue);
 //		suspendProcessing(false);
+	}
+	else if (parameterID == LifeAudioProcessor::paramLR_Or_MSToggle)
+	{
+		ProcessMS = newValue;
+	}
+	else if (parameterID == LifeAudioProcessor::paramPitchOscSyncToggle)
+	{
+		InvertVibrato = newValue;
+		if (InvertVibrato == true)
+		{
+			mDelayVibrato[L]->SetPhase(0.0);
+			mDelayVibrato[R]->SetPhase(float_Pi);
+		}
+		else
+		{
+			mDelayVibrato[L]->SetPhase(0.0);
+			mDelayVibrato[R]->SetPhase(0.0);
+		}
+	}
+	else if (parameterID == LifeAudioProcessor::paramAmpOscSyncToggle)
+	{
+		InvertTremolo = newValue;
+		if (InvertTremolo == true)
+		{
+			mTremolo[L]->SetPhase(0.0);
+			mTremolo[R]->SetPhase(float_Pi);
+		}
+		else
+		{
+			mTremolo[L]->SetPhase(0.0);
+			mTremolo[R]->SetPhase(0.0);
+		}
 	}
 }
 
@@ -422,6 +727,57 @@ void LifeAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 		mState->state = tree;
 	}
 }
+
+/*@AS This is a duplication of some code in the UI. The reason for it is that it's possible
+ for someone to still use the product without bringing up the UI. This prevents processing
+ if not unlocked
+ */
+void LifeAudioProcessor::audioThreadAuthorize()
+{
+    
+    String authkey;
+    String uid, pwd;
+    String err;
+    int days = 0;
+    bool unlockEngine = false;
+    mEditorState.getUIDPWD(uid, pwd);
+    
+    // read main unlock code
+    seqReadKeyFromFile(authkey);
+    
+    // authorize
+    if (authkey.length() && uid.length() && pwd.length()) {
+        days = seqAuthorize(authkey, uid, err);
+        if (days > 0) {
+            // still valid, unlock the engine
+            mUnlocked = true;
+            if (days < 8) {
+                // approaching expiration. try to get a new key from server
+                // writing it to the file. if this fails, we still have some days
+                // left, so ignore failures
+                seqDoReauthorize(uid, pwd, err);
+            }
+        }
+        else {
+            // license expired try to reauthorize
+            if (seqDoReauthorize(uid, pwd, err)) {
+                // successfully reauthorized
+                mUnlocked = true;
+            }
+        }
+    }
+    else { // no unlock code/uid/pwd is present, see if we have trial unlock
+        if (seqReadKeyFromFile(authkey, true)) {
+            days = seqAuthorize(authkey, uid, err, true);
+            if (days > 0) {
+                // still valid, unlock the engine
+                mUnlocked = true;
+            }
+        }      
+    }
+}
+
+
 
 //==============================================================================
 // This creates new instances of the plugin..

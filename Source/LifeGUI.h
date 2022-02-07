@@ -22,6 +22,9 @@
 
 //[Headers]     -- You can add your own extra header files here --
 #include "../JuceLibraryCode/JuceHeader.h"
+//@AS
+#include "./authorization/TrialDialog.h"
+#include "./authorization/AuthDialog.h"
 class LifeAudioProcessor;
 class SliderComponent;
 //[/Headers]
@@ -37,7 +40,8 @@ class SliderComponent;
                                                                     //[/Comments]
 */
 class LifeGUI  : public Component,
-                 public Timer,
+                 public MultiTimer,
+                 public CptNotify,
                  public ButtonListener,
                  public SliderListener
 {
@@ -73,6 +77,7 @@ public:
 		{
 		}
 	};
+
 	class CustomSlider : public LookAndFeel_V3
 	{
 	public:
@@ -97,10 +102,43 @@ public:
 		Label* createSliderTextBox(Slider& slider) override;
 		void drawRotarySlider(Graphics& g, int x, int y, int width, int height, float sliderPos,
 			const float rotaryStartAngle, const float rotaryEndAngle, Slider& slider) override;
+
+	};
+
+	class LifeToggleButton : public LookAndFeel_V3
+	{
+	public:
+		
+		~LifeToggleButton() {};
+
+		void drawButtonBackground(Graphics& g, Button& button, const Colour& backgroundColour,
+			bool isMouseOverButton, bool isButtonDown) override;
+
+		void drawToggleButton(Graphics& g, ToggleButton& button, bool isMouseOverButton,
+			bool isButtonDown) override;
+
+		Image CachedImage_LifeToggleButtonVertical_png;
+			
+	};
+
+	class LifeLinkButton : public LookAndFeel_V3
+	{
+	public:
+
+		~LifeLinkButton() {};
+
+		void drawButtonBackground(Graphics& g, Button& button, const Colour& backgroundColour,
+			bool isMouseOverButton, bool isButtonDown) override;
+
+		void drawToggleButton(Graphics& g, ToggleButton& button, bool isMouseOverButton,
+			bool isButtonDown) override;
+
+		Image CachedImage_LifeLinkButtonVertical_png;
+
 	};
 
 	//Event Timer
-	void timerCallback() override;
+	void timerCallback(int timerID) override;
 
 	//Slider Handler
 	void sliderDragStarted(Slider* sliderThatWasMoved) override;
@@ -127,38 +165,55 @@ public:
     static const int life_ui_cmversionbgv2_pngSize;
     static const char* life_ui_cmbgv3_png;
     static const int life_ui_cmbgv3_pngSize;
+	static const char* white_slideswitch_2pos_vertical_50x50_png;
+	static const int white_slideswitch_2pos_vertical_50x50_pngSize;
+	static const char* white_pushbutton_redlink_25x25_vertical_png;
+	static const int white_pushbutton_redlink_25x25_vertical_pngSize;
+	static const char* life_uibg_png;
+	static const int life_uibg_pngSize;
+    static const char* authorization_png;
+    static const int authorization_pngSize;
+    static const char* lock2small_png;
+    static const int lock2small_pngSize;
+
 
 
 private:
     //[UserVariables]   -- You can add your own custom variables in this section.
     LifeAudioProcessor& mP;
+
 	//Normalize
-	ScopedPointer<NormalisableRange<float>> normalizeDelaySlider;
-	ScopedPointer<NormalisableRange<float>> normalizePitchRateSlider;
-	ScopedPointer<NormalisableRange<float>> normalizePitchAmountSlider;
-	ScopedPointer<NormalisableRange<float>> normalizeFeedbackSlider;
-	ScopedPointer<NormalisableRange<float>> normalizeAmplitudeRateSlider;
-	ScopedPointer<NormalisableRange<float>> normalizeAmplitudeAmountSlider;
-	ScopedPointer<NormalisableRange<float>> normalizeLowPassSlider;
-	ScopedPointer<NormalisableRange<float>> normalizeHighPassSlider;
+	ScopedPointer<NormalisableRange<float>> normalizeDelaySlider[2];
+	ScopedPointer<NormalisableRange<float>> normalizePitchRateSlider[2];
+	ScopedPointer<NormalisableRange<float>> normalizePitchAmountSlider[2];
+	ScopedPointer<NormalisableRange<float>> normalizeFeedbackSlider[2];
+	ScopedPointer<NormalisableRange<float>> normalizeAmplitudeRateSlider[2];
+	ScopedPointer<NormalisableRange<float>> normalizeAmplitudeAmountSlider[2];
+	ScopedPointer<NormalisableRange<float>> normalizeLowPassSlider[2];
+	ScopedPointer<NormalisableRange<float>> normalizeHighPassSlider[2];
 	ScopedPointer<NormalisableRange<float>> normalizeWidthSlider;
 	ScopedPointer<NormalisableRange<float>> normalizeWetDrySlider;
 	ScopedPointer<NormalisableRange<float>> normalizeGainMasterSlider;
-	//Automation
-	bool mAutomationDelay;
-	bool mAutomationPitchRate;
-	bool mAutomationPitchAmount;
-	bool mAutomationAmplitudeRate;
-	bool mAutomationAmplitudeAmount;
-	bool mAutomationFeedback;
 
-	bool mAutomationHighPass;
-	bool mAutomationLowPass;
+	bool DelayLink = false;
+	bool FeedbackLink = false;
+
+	//Automation
+	bool mAutomationDelay[2];
+	bool mAutomationPitchRate[2];
+	bool mAutomationPitchAmount[2];
+	bool mAutomationAmplitudeRate[2];
+	bool mAutomationAmplitudeAmount[2];
+	bool mAutomationFeedback[2];
+
+	bool mAutomationHighPass[2];
+	bool mAutomationLowPass[2];
 
 	bool mAutomationWidth;
 	bool mAutomationWetDry;
 
 	bool mAutomationGainMaster;
+
 	// Background
 	Image bgrImgDelay;
 	ScopedPointer<KnobImageInfo> knobInfoDelay;
@@ -171,24 +226,49 @@ private:
 	Image bgrImgAmount;
 	ScopedPointer<KnobImageInfo> knobInfoAmount;
 	ScopedPointer<CustomSlider> knobLookAmount;
+    
+    //@AS
+    SeqGlob mGlob;
+    bool mUnlocked;// will be set true when we are unlocked
+    // if set to true then the authorize function will try to reauthorize if
+    // expired or within reauth period
+    bool mTryReauth;
+    // For trial dialog
+    SeqTrialDialog mTrialDialog;
+    SeqAuthDialog mAuthDlg;
+    // Inherited via CptNotify
+    virtual void cptValueChange(int cptId, int value) override;
+    void authorize();
+    void prepareAuthorization(bool allowRenew);
+	
+	ScopedPointer<LifeToggleButton> LifeToggleButtonLookandFeel;
+	ScopedPointer<LifeLinkButton> LifeLinkButtonLookandFeel;
+
+	Image CachedImage_Life_UI_Background_v1_png;
+    
+    
+	
     //[/UserVariables]
 
     //==============================================================================
     ScopedPointer<ToggleButton> pitchOscilationsSyncToggleButton;
     ScopedPointer<ToggleButton> amplitudeOscilationsSyncToggleButton;
-    ScopedPointer<Slider> delaySlider;
-    ScopedPointer<Slider> pitchRateSlider;
-    ScopedPointer<Slider> pitchAmountSlider;
-    ScopedPointer<Slider> feedbackSlider;
+	ScopedPointer<ToggleButton> LR_Or_MS_ToggleButton;
+	ScopedPointer<ToggleButton> LinkDelayToggleButton;
+	ScopedPointer<ToggleButton> LinkFeedbackToggleButton;
+    ScopedPointer<Slider> delaySlider[2];
+    ScopedPointer<Slider> pitchRateSlider[2];
+    ScopedPointer<Slider> pitchAmountSlider[2];
+    ScopedPointer<Slider> feedbackSlider[2];
     ScopedPointer<Slider> stereoWidthSlider;
-    ScopedPointer<Slider> amplitudeRateSlider;
-    ScopedPointer<Slider> amplitudeAmountSlider;
-    ScopedPointer<Slider> highPassFilterSlider;
-    ScopedPointer<Slider> loPassFilterSlider;
+    ScopedPointer<Slider> amplitudeRateSlider[2];
+    ScopedPointer<Slider> amplitudeAmountSlider[2];
+    ScopedPointer<Slider> highPassFilterSlider[2];
+    ScopedPointer<Slider> loPassFilterSlider[2];
     ScopedPointer<Slider> wetDrySlider;
     ScopedPointer<Slider> masterGainSlider;
+    ScopedPointer<ImageButton> mBtnUnlock;
     Image cachedImage_life_ui_cmbgv3_png_1;
-
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LifeGUI)
